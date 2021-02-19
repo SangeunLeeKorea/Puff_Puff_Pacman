@@ -1,0 +1,524 @@
+﻿<html>
+	<head>
+		<style>
+			#gameboard {
+				background-image: url( "image/background_dark.png" );
+			}
+		</style>
+		
+	</head>
+	<body>
+		<canvas id="gameboard" width=1080 height=720> </canvas>
+        <div id="round">1라운드</div>
+        <div id="scoreboard"></div>
+        <div id="timer">0 : 0</div>
+        <div id="life">라이프: ♥♥♥</div>
+        <div id="restart"></div>
+		<script>
+			// 배경 세팅
+			var board = document.getElementById( "gameboard" );
+			var context = board.getContext( "2d" );
+            var wall_depth = 10;
+
+            var wall = [
+                [0, 0, 540, 10], [0, 10, 10, 700], [0, 710, 540, 10],
+                [40, 40, 480, 10], [40, 50, 10, 290], [40, 380, 10, 290],
+                [40, 670, 480, 10], [80, 80, 50, 10], [80, 90, 10, 540],
+                [80, 630, 50, 10], [120, 120, 10, 480], [160, 80, 380, 10],
+                [160, 120, 50, 220], [160, 380, 50, 220], [240, 120, 50, 10],
+                [240, 130, 10, 460], [240, 590, 80, 10], [280, 160, 10, 400],
+                [290, 355, 250, 10], [320, 120, 220, 20], [320, 140, 20, 160],
+                [320, 300, 230, 20], [320, 400, 220, 40], [320, 470, 230, 10], //맨 첫번째: 230 -> 200으로 수정 시 중앙공간 개방
+                [320, 510, 220, 50], [350, 590, 190, 10], [160, 630, 380, 10]
+            ]
+            drawWall();
+
+            function drawWall() {
+                var wallimg = new Image();
+                wallimg.src = "image/wall.png";
+                wallimg.onload = function () {
+                    var pattern = context.createPattern(wallimg, "repeat");
+
+                    for (i = 0; i < wall.length; i++) {
+                        context.rect(wall[i][0], wall[i][1], wall[i][2], wall[i][3]);
+                        context.fillStyle = pattern;
+                        context.fill();
+                        context.rect(1080 - wall[i][0] - wall[i][2], wall[i][1], wall[i][2], wall[i][3]);
+                        context.fillStyle = pattern;
+                        context.fill();
+                    }
+                }
+            }
+            
+            //food 그리기
+            var food = [
+                [17, 17], [17, 97], [17, 177], [17, 257], [17, 337],
+                [17, 417], [17, 505], [17, 596], [17, 687], [57, 57],
+                [57, 137], [57, 217], [57, 297], [57, 377], [57, 457],
+                [57, 552], [57, 647], [97, 17], [97, 97], [97, 177],
+                [97, 257], [97, 337], [97, 428], [97, 519], [97, 607], [97, 687],
+                [137, 57], [137, 177], [137, 257], [137, 337], [137, 428],
+                [137, 519], [137, 647], [177, 17], [177, 97], [177, 607],
+                [177, 687], [217, 57], [217, 177], [217, 257], [217, 337],
+                [217, 428], [217, 519], [217, 647], [257, 17], [257, 97],
+                [257, 177], [257, 257], [257, 337], [257, 428], [257, 519],
+                [257, 607], [257, 687], [297, 57], [297, 172], [297, 252],
+                [297, 332], [297, 447], [297, 486], [297, 567], [297, 647],
+                [337, 17], [337, 97], [337, 607], [337, 687], [377, 57],
+                [377, 332], [377, 447], [377, 486], [377, 567], [377, 647],
+                [417, 17], [417, 97], [417, 607], [417, 687], [457, 57],
+                [457, 332], [457, 447], [457, 486], [457, 567], [457, 647],
+                [497, 17], [497, 97], [497, 607], [497, 687]
+            ]
+
+            var eaten = new Array(food.length * 2).fill(false);
+            var foodcount = eaten.length;
+
+            repaintFood();
+
+            function repaintFood() {
+                var foodimg = new Image();
+                foodimg.src = "image/food.png";
+                foodimg.onload = function () {
+                    for (i = 0; i < food.length; i++) {
+                        if (!eaten[i]) {
+                            context.drawImage(foodimg, food[i][0], food[i][1]);
+                        }
+                        if (!eaten[i + eaten.length/2]) {
+                            context.drawImage(foodimg, 1080 - food[i][0] - foodimg.width, food[i][1]);
+                        }
+                    }
+                }
+            }
+
+            //점수 계산
+            var score = 0;
+            var scoreboard = document.getElementById("scoreboard");
+            setScore(0);
+            function setScore(add = 0) {
+                score += add;
+                showScore();
+            }
+            function showScore() {
+                scoreboard.innerHTML = "점수: " + score;
+            }
+
+            //몇라운드인지
+            var round = 1;
+            var roundboard = document.getElementById("round");
+            function showRound() {
+                roundboard.innerHTML = round + "라운드";
+            }
+            function nextRound() {
+                eaten.fill(false);
+                foodcount = eaten.length;
+            }
+
+            //타이머(스톱워치)
+            var time = 1;
+            var min=0, sec=0;
+            var timerboard = document.getElementById("timer");
+            var timer = setInterval(runtimer, 1000);
+
+            function runtimer() {
+                min = parseInt(time / 60);
+                sec = time % 60;
+                timerboard.innerHTML = min + " : " + sec;
+                time++;
+            }
+
+            function stoptimer() {
+                clearInterval(timer);
+            }
+
+            //라이프
+            var maxLife = 3;
+            var life = maxLife;
+            var lifeboard = document.getElementById("life");
+            setLife(life);
+            function setLife(lifeT) {
+                var result = "라이프: ";
+                for (i = 0; i < lifeT; i++) {
+                    result += "♥";
+                }
+                for (i = 0; i < maxLife - lifeT; i++) {
+                    result += "♡";
+                }
+                lifeboard.innerHTML = result;
+            }
+
+            function resetLife() {
+                life = 3;
+                setLife(life);
+            }
+            
+			// 캐릭터 세팅
+			
+			// 1. 주인공 캐릭터 관련 변수
+			var char_index = 0;
+			
+			var char_x = 522;
+            var char_y = 442;
+            var init_char_x = char_x;
+            var init_char_y = char_y;
+			var char_size = 26;
+			var char_speed = 10;
+			
+			var char_images = [ "image/character1.png", "image/character2.png" ];
+			var character = new Image();
+			
+			// 2. 상어 캐릭터 관련 변수
+			var shark_index = 0;
+			
+			var shark_x = 522;
+            var shark_y = 322;
+            var init_shark_x = shark_x;
+            var init_shark_y = shark_y;
+			var shark_size = 26;
+            var shark_speed = 10;
+            var shark_T = 200;
+            var init_shark_T = shark_T;
+			
+			var shark_direction = 1;	// 1: left, 2: right, 3: up, 4: down
+			
+			var shark_images = [ "image/shark1.png", "image/shark2.png" ];
+			var shark = new Image();
+			
+			// 캐릭터 애니메이션
+            function character_animate() {
+                character.src = char_images[char_index];
+
+				if( shark_index == 0 ) shark_index = 1;
+				else shark_index = 0;
+				
+				if( char_index == 0 ) char_index = 1;
+				else char_index = 0;
+			}
+			var character_animate_id = setInterval( character_animate, 500 );
+		
+			// 키보드를 감지하는 함수
+			function keyHandler(){
+				var key;
+				if( window.event ) {
+					key = window.event.keyCode;
+				} else {
+					key = null;
+				}
+				
+				if( key == 37 ){		// 37 : left
+					draw( "left" );
+				} else if( key == 38 ){	// 38 : up
+					draw( "up" );
+				} else if( key == 39 ){	// 39 : right
+					draw( "right" );
+				} else if( key == 40 ){	// 40 : down
+					draw( "down" );
+				}
+			}
+			
+			// 주인공 캐릭터를 그리는 함수
+            function draw(direction = "") {
+                var context = document.getElementById("gameboard").getContext("2d");
+                context.clearRect(char_x, char_y, char_size, char_size);
+                switch (direction) {
+                    case "up":
+                        char_y = char_y - char_speed;
+                        if (!checkWall(char_x, char_y)) {
+                            char_y = char_y + char_speed;
+                        }
+                        break;
+                    case "down":
+                        char_y = char_y + char_speed;
+                        if (!checkWall(char_x, char_y)) {
+                            char_y = char_y - char_speed;
+                        }
+                        break;
+                    case "left":
+                        char_x = char_x - char_speed;
+                        if (!checkWall(char_x, char_y)) {
+                            char_x = char_x + char_speed;
+                        }
+                        break;
+                    case "right":
+                        char_x = char_x + char_speed;
+                        if (!checkWall(char_x, char_y)) {
+                            char_x = char_x - char_speed;
+                        }
+                        break;
+                    default:
+                        break;
+                }
+
+                checkEaten(char_x, char_y);
+                repaintFood();
+
+                character.src = char_images[char_index];
+                character.onload = function () {
+                    context.drawImage(character, char_x, char_y, char_size, char_size);
+                };
+                
+            }
+            character.src = char_images[char_index];
+            character.onload = function () {
+                context.drawImage(character, char_x, char_y, char_size, char_size);
+            };							
+            document.onkeydown = keyHandler;	// 키보드 리스너 적용
+
+            //벽 닿았는지 체크 - 벽이 닿으면 false, 닿지 않으면 true
+            function checkWall(x, y) {
+                for (i = 0; i < wall.length; i++) {
+                    var left = wall[i][0];
+                    var top = wall[i][1];
+                    var right = wall[i][2]+left;
+                    var bottom = wall[i][3]+top;
+
+                    if (x<right && x+26>left && y<bottom && y+26>top) {
+                        return false;
+                    }
+
+                    if (x < 1080-left && x + 26 > 1080-right && y < bottom && y + 26 > top) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            //먹이 먹었는지 체크
+            function checkEaten(x, y) {
+                for (i = 0; i < food.length; i++) {
+                    var left = food[i][0];
+                    var top = food[i][1];
+
+                    if (x < left + 16 && x + 26 > left && y < top + 16 && y + 26 > top && !eaten[i]) {
+                        eaten[i] = true;
+                        setScore(100);
+                        foodcount--;
+                        if (foodcount == 0) {
+                            cleared();
+                        }
+                        return true;
+                    }
+
+                    if (x < 1080 - left && x + 26 > 1080 - left - 16 && y < top + 16 && y + 26 > top && !eaten[i + eaten.length/2]) {
+                        eaten[i + eaten.length / 2] = true;
+                        setScore(100);
+                        foodcount--;
+                        if (foodcount == 0) {
+                            cleared();
+                        }
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            //먹이를 모두 먹었을 경우
+            function cleared() {
+                stoptimer();
+                alert(round + "라운드 클리어!");
+                round++;
+                if (round == 4) {//3라운드 끝낸 경우
+                    finishGame();
+                    return;
+                }
+                additionalP();
+                showRound();
+                nextRound();
+                if (round == 2) {
+                    shark_T = 100;
+                } else if (round == 3) {
+                    shark_T = 40;
+                }
+                resetLocation();
+                timer = setInterval(runtimer, 1000);
+                //다음 라운드로 넘어감
+            }
+
+            //추가점수 계산
+            function additionalP() {
+                score += (life - 1) * 1000;
+                score += (300 - time) * 10;
+                time = 0;
+                life = maxLife;
+                showScore();
+            }
+			
+			// 벽이 있는 경우에서 상어의 다음 방향을 결정하는 함수
+			function choice_direction(){
+				var direction_arr = new Array();
+				
+				if( checkWall( shark_x - shark_speed, shark_y ) && shark_direction !== 2 ) direction_arr.push( 1 );
+				if( checkWall( shark_x + shark_speed, shark_y ) && shark_direction !== 1 ) direction_arr.push( 2 );
+				if( checkWall( shark_x, shark_y - shark_speed ) && shark_direction !== 4 ) direction_arr.push( 3 );
+				if( checkWall( shark_x, shark_y + shark_speed ) && shark_direction !== 3 ) direction_arr.push( 4 );
+				
+				var direction_pos = Math.floor( Math.random() * direction_arr.length );
+				shark_direction = direction_arr[ direction_pos ];
+			}
+			
+			// 여러 갈래 길에서 상어의 다음 방향을 결정하는 함수
+			function choice_one_way(){
+				var direction_arr = new Array();
+				direction_arr.push( shark_direction );
+				
+				switch( shark_direction ){
+				case 1 :		// left
+					if( checkWall( shark_x, shark_y - shark_speed ) ) direction_arr.push( 3 );
+					if( checkWall( shark_x, shark_y + shark_speed ) ) direction_arr.push( 4 );
+					break;
+				case 2 :		// right
+					if( checkWall( shark_x, shark_y - shark_speed ) ) direction_arr.push( 3 );
+					if( checkWall( shark_x, shark_y + shark_speed ) ) direction_arr.push( 4 );
+					break;
+				case 3 :		// up
+					if( checkWall( shark_x - shark_speed, shark_y ) ) direction_arr.push( 1 );
+					if( checkWall( shark_x + shark_speed, shark_y ) ) direction_arr.push( 2 );
+					break;
+				case 4 :		// down
+					if( checkWall( shark_x - shark_speed, shark_y ) ) direction_arr.push( 1 );
+					if( checkWall( shark_x + shark_speed, shark_y ) ) direction_arr.push( 2 );
+					break;
+				default :
+					break;
+				}
+				
+				var direction_pos = Math.floor( Math.random() * direction_arr.length );
+				shark_direction = direction_arr[ direction_pos ];
+			}
+			
+			// 상어를 그리고 이동시키는 함수
+			function shark_draw(){
+				var context = document.getElementById( "gameboard" ).getContext( "2d" );
+				
+				// 방향을 정하는 부분
+				switch( shark_direction ){
+				case 1 :		// left
+					if ( !checkWall( shark_x - shark_speed, shark_y ) ) {		// 진로에 벽이 있는 경우
+						choice_direction()
+					} else {
+						choice_one_way();
+					}
+					break;
+				case 2 :		// right
+					if ( !checkWall( shark_x + shark_speed, shark_y ) ) {		// 진로에 벽이 있는 경우
+						choice_direction()
+					} else {
+						choice_one_way();
+					}
+					break;
+				case 3 :		// up
+					if ( !checkWall( shark_x, shark_y - shark_speed ) ) {		// 진로에 벽이 있는 경우
+						choice_direction()
+					} else {
+						choice_one_way();
+					}
+					break;
+				case 4 :		// down
+					if ( !checkWall( shark_x, shark_y + shark_speed ) ) {		// 진로에 벽이 있는 경우
+						choice_direction()
+					} else {
+						choice_one_way();
+					}
+					break;
+				default :
+					break;
+				}
+				
+				context.clearRect(shark_x, shark_y, shark_size, shark_size);
+				// 이동시키는 부분
+				switch( shark_direction ){
+				case 1 :		// left
+					shark_x = shark_x - shark_speed;
+					break;
+				case 2 :		// right
+					shark_x = shark_x + shark_speed;
+					break;
+				case 3 :		// up
+					shark_y = shark_y - shark_speed;
+					break;
+				case 4 :		// down
+					shark_y = shark_y + shark_speed;
+					break;
+				default :
+					break;
+				}
+				
+                repaintFood();
+
+                shark.src = shark_images[shark_index];
+				shark.onload = function(){
+					context.drawImage( shark, shark_x, shark_y );
+				};
+            }
+            var shark_draw_id = setInterval(shark_draw, shark_T);
+			
+			// 캐릭터와 상어의 충돌을 감지하는 함수
+			function crash_char_shark(){
+				var isCrash = false;
+				// 좌상단
+				if( shark_x <= char_x && char_x <= shark_x + shark_size && shark_y <= char_y && char_y <= shark_y + shark_size ) isCrash = true;
+				if( shark_x <= char_x + char_size && char_x + char_size <= shark_x + shark_size && shark_y <= char_y + char_size && char_y + char_size <= shark_y + shark_size ) isCrash = true;
+				
+				if( isCrash ){
+                    life--;
+                    setLife(life);
+                    if (life == 0) {
+                        alert("Game Over");
+                        restart();
+                    } else {
+                        resetLocation();
+                    }
+				}
+			}
+			var crash_char_shark_id = setInterval( crash_char_shark, 100 );
+
+            //상어, 캐릭터 다시 원래위치로
+            function resetLocation() {
+                clearInterval(character_animate_id);
+                clearInterval(shark_draw_id);
+                clearInterval(crash_char_shark_id);
+                context.clearRect(0, 0, 1080, 720);
+                drawWall();
+                repaintFood();
+                char_x = init_char_x;
+                char_y = init_char_y;
+                shark_x = init_shark_x;
+                shark_y = init_shark_y;
+                character_animate_id = setInterval(character_animate, 500);
+                crash_char_shark_id = setInterval(crash_char_shark, 100);
+                shark_draw_id = setInterval(shark_draw, shark_T);
+                
+            }
+
+            //게임 클리어
+            var bttnboard = document.getElementById("restart");
+            function finishGame() {
+                clearInterval(character_animate_id);
+                clearInterval(shark_draw_id);
+                clearInterval(crash_char_shark_id);
+                stoptimer();
+                var result = "점수: " + score;
+                context.font = "30pt Arial";
+                context.fillText(result, 400, 220);
+                bttnboard.innerHTML = "<button onclick='restart()'>다시 플레이하기</button>";
+            }
+
+            //game over 될 시 재시작
+            function restart() {
+                bttnboard.innerHTML = "";
+                stoptimer();
+                nextRound();
+                shark_T = init_shark_T;
+                round = 1;
+                score = 0;
+                time = 0;
+                runtimer();
+                showRound();
+                showScore();
+                resetLife();
+                resetLocation();
+                timer = setInterval(runtimer, 1000);
+            }
+		</script>
+	</body>
+</html>
