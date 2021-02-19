@@ -1,0 +1,3 @@
+1. Using Java Script, HTML, CSS, developed web game which is similar to Pacman.
+
+2. Participating field: Design, Map and points embody
